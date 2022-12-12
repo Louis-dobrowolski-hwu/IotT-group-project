@@ -20,6 +20,12 @@ see the system diagram in Figure 1, below.
 The group should produce code for all the ESP8266s in the wireless sensor network
 (sensing and bridge node), and also for the gateway.
 
+![Diagram](Diagram.png)
+
+```
+Figure 1 : System Diagram
+```
+
 
 **Requirements** :
 
