@@ -1,4 +1,4 @@
-# IotT-group-project
+# IoT-group-project
 
 
 **B31TF IoT Group Assignment**
