@@ -1,3 +1,7 @@
+
+
+//This code was written from scratch by IoT Group 1
+
 #include <ESP8266WiFi.h>
 #include <Adafruit_NeoPixel.h>
 #include <DHT.h>
@@ -32,14 +36,14 @@ static char msg[50];
 StaticJsonDocument<200> doc;
 
 
-volatile boolean haveReading = false;
+volatile boolean DataRecieved = false;
 int flag=0;
 int flag2=0;
 
 // Add WiFi connection information
-char ssid[] = "VodafoneMobileWiFi-A5761B";     //  your network SSID (name)
-char pass[] = "4Z64755417";  // your network password
-int heartBeat;
+char ssid[] = "*******";     //  your network SSID (name)
+char pass[] = "*******";  // your network password
+int compt;
 
 //structure of the message
 typedef struct struct_message {
@@ -64,34 +68,30 @@ void setup() {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
-  
-  // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info
+  //Init the connection ESP-now
   esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
   esp_now_register_recv_cb(OnDataRecv);
-
-  Serial.println("Setup done");
 }
 
 void loop() {
   
-  if (millis()-heartBeat > 10000) {
-    heartBeat = millis();
+  if (millis()-compt > 10000) {
+    compt = millis();
     wifiConnect();
     reconnectMQTT();
     sendToBroker();
     mqtt.disconnect();
     delay(200);
-    ESP.restart(); // <----- Reboots to re-enable ESP-NOW
+    ESP.restart(); 
   }
-  if (haveReading) {
-    haveReading = false;
+  if (DataRecieved) {
+    DataRecieved = false;
     wifiConnect();
     reconnectMQTT();
     sendToBroker();
     mqtt.disconnect();
     delay(200);
-    ESP.restart(); // <----- Reboots to re-enable ESP-NOW
+    ESP.restart(); 
   }
 
 }
@@ -116,7 +116,7 @@ void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
   else if(myData.id==2){
     flag2=1;
   }
-  haveReading = true;  
+  DataRecieved = true;  
 
 }
 
@@ -174,7 +174,6 @@ void wifiConnect() {
      delay(250);
      Serial.print(".");
   }  
-  Serial.print("\nWiFi connected, IP address: "); Serial.println(WiFi.localIP());
 }
 
 //connect to MQTT 
