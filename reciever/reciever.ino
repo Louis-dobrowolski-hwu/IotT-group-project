@@ -4,9 +4,7 @@
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <espnow.h>
-// --------------------------------------------------------------------------------------------
-//        UPDATE CONFIGURATION TO MATCH YOUR ENVIRONMENT
-// --------------------------------------------------------------------------------------------
+
 
 // Watson IoT connection details
 #define MQTT_HOST "broker.hivemq.com"
@@ -15,26 +13,35 @@
 #define MQTT_USER "" // no need for authentication, for now
 #define MQTT_TOKEN "" // no need for authentication, for now
 #define MQTT_TOPIC "mqttv312/evt/status/fmt/json/group_project"
-//#define MQTT_TOPIC_DISPLAY "mqttv312/cmd/display/fmt/Intervalle"
 
 // Add GPIO pins used to connect devices
 #define BUT_PIN 5 // GPIO pin the data line of RGB button is connected to
 
 
+// MQTT objects
+void callback(char* topic, byte* payload, unsigned int length);
+WiFiClient wifiClient;
+PubSubClient mqtt(MQTT_HOST, MQTT_PORT, callback, wifiClient);
+
+// variables to hold data
+StaticJsonDocument<100> jsonDoc;
+JsonObject payload = jsonDoc.to<JsonObject>();
+JsonObject status = payload.createNestedObject("d");
+static char msg[50];
+
+StaticJsonDocument<200> doc;
+
+
 volatile boolean haveReading = false;
 int flag=0;
 int flag2=0;
-// Add WiFi connection information
-char ssid[] = "iPhone de Mona";     //  your network SSID (name)
-char pass[] = "123456789";  // your network password
 
+// Add WiFi connection information
+char ssid[] = "VodafoneMobileWiFi-A5761B";     //  your network SSID (name)
+char pass[] = "4Z64755417";  // your network password
 int heartBeat;
 
-// --------------------------------------------------------------------------------------------
-//        SHOULD NOT NEED TO CHANGE ANYTHING BELOW THIS LINE
-// --------------------------------------------------------------------------------------------
-//ESP NOW 
-
+//structure of the message
 typedef struct struct_message {
     int id;
     int b1;
@@ -44,6 +51,50 @@ typedef struct struct_message {
 
 // Create a struct_message called myData
 struct_message myData;
+
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Set device as a Wi-Fi Station
+  WiFi.mode(WIFI_STA);
+
+  // Init ESP-NOW
+  if (esp_now_init() != 0) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+  
+  // Once ESPNow is successfully Init, we will register for recv CB to
+  // get recv packer info
+  esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
+  esp_now_register_recv_cb(OnDataRecv);
+
+  Serial.println("Setup done");
+}
+
+void loop() {
+  
+  if (millis()-heartBeat > 10000) {
+    heartBeat = millis();
+    wifiConnect();
+    reconnectMQTT();
+    sendToBroker();
+    mqtt.disconnect();
+    delay(200);
+    ESP.restart(); // <----- Reboots to re-enable ESP-NOW
+  }
+  if (haveReading) {
+    haveReading = false;
+    wifiConnect();
+    reconnectMQTT();
+    sendToBroker();
+    mqtt.disconnect();
+    delay(200);
+    ESP.restart(); // <----- Reboots to re-enable ESP-NOW
+  }
+
+}
 
 // Callback function that will be executed when data is received
 void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
@@ -69,20 +120,6 @@ void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
 
 }
 
-// MQTT objects
-void callback(char* topic, byte* payload, unsigned int length);
-WiFiClient wifiClient;
-PubSubClient mqtt(MQTT_HOST, MQTT_PORT, callback, wifiClient);
-
-// variables to hold data
-StaticJsonDocument<100> jsonDoc;
-JsonObject payload = jsonDoc.to<JsonObject>();
-JsonObject status = payload.createNestedObject("d");
-static char msg[50];
-
-StaticJsonDocument<200> doc;
-
-
 void callback(char* topic, byte* payload, unsigned int length) {
   // handle message arrived
   Serial.print("Message arrived [");
@@ -92,45 +129,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println((char *)payload);
   DeserializationError error = deserializeJson(doc, payload);
 
-}
-
-void setup() {
-  Serial.begin(115200);
-  
-  // Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
-
-  // Init ESP-NOW
-  if (esp_now_init() != 0) {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
-  
-  // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info
-  esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
-  esp_now_register_recv_cb(OnDataRecv);
-
-  Serial.println("Setup done");
-}
-
-void loop() {
-    if (millis()-heartBeat > 30000) {
-    Serial.println("Waiting for ESP-NOW messages...");
-    heartBeat = millis();
-  }
-  if (haveReading) {
-    haveReading = false;
-    wifiConnect();
-    reconnectMQTT();
-    sendToBroker();
-    mqtt.disconnect();
-    delay(200);
-    ESP.restart(); // <----- Reboots to re-enable ESP-NOW
-  }
-
-
-  // Pause - but keep polling MQTT for incoming messages
 }
 
 void sendToBroker() {
@@ -160,12 +158,13 @@ void sendToBroker() {
     status["button2"] = 0;
   }
   serializeJson(jsonDoc, msg, 50);
-  Serial.println(msg);
+  //Serial.println(msg);
   if (!mqtt.publish(MQTT_TOPIC, msg)) {
     Serial.println("MQTT Publish failed");
   }
 }  
 
+//connect to the wifi 
 void wifiConnect() {
   WiFi.mode(WIFI_STA);
   Serial.println();
@@ -178,6 +177,7 @@ void wifiConnect() {
   Serial.print("\nWiFi connected, IP address: "); Serial.println(WiFi.localIP());
 }
 
+//connect to MQTT 
 void reconnectMQTT() {
   if (mqtt.connect(MQTT_DEVICEID, MQTT_USER, MQTT_TOKEN)) {
     Serial.println("MQTT Connected");
